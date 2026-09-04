@@ -9,26 +9,30 @@ class Program
     {
         Console.Title = "OurSigner";
         Console.WriteLine("OurSigner");
-        Console.WriteLine("USB Device Detection");
+        Console.WriteLine("iPhone USB Detection");
         Console.WriteLine();
-
-        using var watcher = new ManagementEventWatcher(
-            new WqlEventQuery(
-                "SELECT * FROM Win32_DeviceChangeEvent WHERE EventType = 2"
-            )
-        );
-
-        watcher.EventArrived += (_, _) => CheckForIPhone();
 
         CheckForIPhone();
 
-        Console.WriteLine("Waiting for iPhone...");
-        Console.WriteLine("Connect your iPhone with a USB cable.");
+        using var watcher = new ManagementEventWatcher(
+            new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent")
+        );
+
+        watcher.EventArrived += (_, _) =>
+        {
+            System.Threading.Thread.Sleep(1000);
+            CheckForIPhone();
+        };
+
+        watcher.Start();
+
+        Console.WriteLine("Waiting for an iPhone...");
+        Console.WriteLine("Connect an iPhone using USB-A or USB-C.");
         Console.WriteLine();
         Console.WriteLine("Press Enter to exit.");
 
-        watcher.Start();
         Console.ReadLine();
+
         watcher.Stop();
     }
 
@@ -37,6 +41,8 @@ class Program
         using var searcher = new ManagementObjectSearcher(
             "SELECT Name, Manufacturer, PNPDeviceID FROM Win32_PnPEntity"
         );
+
+        bool found = false;
 
         foreach (ManagementObject device in searcher.Get())
         {
@@ -47,16 +53,26 @@ class Program
             if (
                 name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
                 name.Contains("Apple Mobile Device", StringComparison.OrdinalIgnoreCase) ||
-                manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
-                pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
+                (
+                    manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
+                    pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
+                )
             )
             {
-                Console.WriteLine("📱 iPhone detected!");
+                found = true;
+
+                Console.WriteLine("================================");
+                Console.WriteLine("📱 IPHONE CONNECTED");
+                Console.WriteLine("================================");
                 Console.WriteLine($"Device: {name}");
                 Console.WriteLine($"Manufacturer: {manufacturer}");
                 Console.WriteLine();
-                return;
             }
+        }
+
+        if (!found)
+        {
+            Console.WriteLine("❌ iPhone not detected.");
         }
     }
 }
