@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Management;
 using System.Windows.Forms;
 
 namespace OurSigner;
@@ -17,10 +18,8 @@ static class Program
 class MainForm : Form
 {
     Label phoneStatus = new();
-    Label accountStatus = new();
-    Label certificateStatus = new();
-    Label signingStatus = new();
     Button pairButton = new();
+    ManagementEventWatcher? watcher;
 
     public MainForm()
     {
@@ -56,6 +55,9 @@ class MainForm : Form
         AddAccountCard();
         AddSigningCard();
         AddCertificateCard();
+
+        StartDeviceWatcher();
+        CheckForIPhone();
     }
 
     void AddPhoneCard()
@@ -63,27 +65,27 @@ class MainForm : Form
         var card = CreateCard(35, 115, 510, 145);
 
         var title = CreateLabel("📱  iPhone", 20, 18, 18, true);
-        phoneStatus = CreateLabel("●  Not detected", 20, 55, 11, false);
+
+        phoneStatus = CreateLabel(
+            "●  Waiting for iPhone...",
+            20, 55, 11, false
+        );
 
         pairButton = new Button
         {
-            Text = "Detect iPhone",
+            Text = "Pair iPhone",
             Location = new Point(20, 88),
             Width = 470,
-            Height = 35
+            Height = 35,
+            Enabled = false
         };
 
         pairButton.Click += (_, _) =>
         {
-            phoneStatus.Text = "●  iPhone detected";
+            phoneStatus.Text = "●  Paired";
             phoneStatus.ForeColor = Color.LightGreen;
-            pairButton.Text = "Pair iPhone";
-            pairButton.Click -= (_, _) => { };
-            pairButton.Click += (_, _) =>
-            {
-                phoneStatus.Text = "●  Paired";
-                pairButton.Text = "Paired ✓";
-            };
+            pairButton.Text = "Paired ✓";
+            pairButton.Enabled = false;
         };
 
         card.Controls.Add(title);
@@ -98,7 +100,7 @@ class MainForm : Form
 
         var title = CreateLabel("🍎  Apple Account", 20, 18, 18, true);
 
-        accountStatus = CreateLabel(
+        var status = CreateLabel(
             "●  Not authenticated",
             20, 55, 11, false
         );
@@ -113,12 +115,12 @@ class MainForm : Form
 
         button.Click += (_, _) =>
         {
-            accountStatus.Text = "●  Authentication handled by Apple";
-            accountStatus.ForeColor = Color.LightGreen;
+            status.Text = "●  Use Apple's authentication flow";
+            status.ForeColor = Color.LightGreen;
         };
 
         card.Controls.Add(title);
-        card.Controls.Add(accountStatus);
+        card.Controls.Add(status);
         card.Controls.Add(button);
         Controls.Add(card);
     }
@@ -129,13 +131,13 @@ class MainForm : Form
 
         var title = CreateLabel("🔐  Signing", 20, 18, 18, true);
 
-        signingStatus = CreateLabel(
+        var status = CreateLabel(
             "Ready",
             20, 58, 11, false
         );
 
         card.Controls.Add(title);
-        card.Controls.Add(signingStatus);
+        card.Controls.Add(status);
         Controls.Add(card);
     }
 
@@ -145,7 +147,7 @@ class MainForm : Form
 
         var title = CreateLabel("📜  Certificates", 20, 18, 18, true);
 
-        certificateStatus = CreateLabel(
+        var status = CreateLabel(
             "No signing credentials loaded",
             20, 58, 11, false
         );
@@ -160,14 +162,78 @@ class MainForm : Form
 
         button.Click += (_, _) =>
         {
-            certificateStatus.Text = "Checking local signing credentials...";
-            signingStatus.Text = "Checking...";
+            status.Text = "Checking local credentials...";
         };
 
         card.Controls.Add(title);
-        card.Controls.Add(certificateStatus);
+        card.Controls.Add(status);
         card.Controls.Add(button);
         Controls.Add(card);
+    }
+
+    void StartDeviceWatcher()
+    {
+        watcher = new ManagementEventWatcher(
+            new WqlEventQuery(
+                "SELECT * FROM Win32_DeviceChangeEvent"
+            )
+        );
+
+        watcher.EventArrived += (_, _) =>
+        {
+            BeginInvoke(CheckForIPhone);
+        };
+
+        watcher.Start();
+    }
+
+    void CheckForIPhone()
+    {
+        using var searcher = new ManagementObjectSearcher(
+            "SELECT Name, Manufacturer, PNPDeviceID FROM Win32_PnPEntity"
+        );
+
+        bool found = false;
+
+        foreach (ManagementObject device in searcher.Get())
+        {
+            string name = device["Name"]?.ToString() ?? "";
+            string manufacturer = device["Manufacturer"]?.ToString() ?? "";
+            string pnpId = device["PNPDeviceID"]?.ToString() ?? "";
+
+            if (
+                name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Apple Mobile Device", StringComparison.OrdinalIgnoreCase) ||
+                (
+                    manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
+                    pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
+                )
+            )
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (found)
+        {
+            phoneStatus.Text = "●  iPhone detected";
+            phoneStatus.ForeColor = Color.LightGreen;
+            pairButton.Enabled = true;
+        }
+        else
+        {
+            phoneStatus.Text = "●  Waiting for iPhone...";
+            phoneStatus.ForeColor = Color.Gray;
+            pairButton.Enabled = false;
+        }
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        watcher?.Stop();
+        watcher?.Dispose();
+        base.OnFormClosed(e);
     }
 
     Panel CreateCard(int x, int y, int width, int height)
