@@ -46,8 +46,6 @@ Executable:
 
 `OurSigner.exe`
 
-## Status
-
 ## Platform Support
 
 - 🪟 Windows 10/11 (64-bit) — ✅ Supported
