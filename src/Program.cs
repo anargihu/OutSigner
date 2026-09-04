@@ -1,7 +1,8 @@
 using System;
 using System.Drawing;
-using System.IO;
+using System.Drawing.Drawing2D;
 using System.Management;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace OurSigner;
@@ -18,153 +19,190 @@ static class Program
 
 class MainForm : Form
 {
-    Label deviceStatus = new();
-    Label itunesStatus = new();
-    Label accountStatus = new();
-    Label signingStatus = new();
-    Label ipaStatus = new();
-    Label logLabel = new();
-    Button pairButton = new();
-    Button ipaButton = new();
+    Label deviceValue = new();
+    Label signingValue = new();
+    Label ipaValue = new();
+    Label activityValue = new();
     Button installButton = new();
     ManagementEventWatcher? watcher;
-    string? selectedIpa;
+
+    [DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
     public MainForm()
     {
         Text = "OurSigner";
-        Width = 650;
-        Height = 850;
+        Width = 1050;
+        Height = 700;
+        MinimumSize = new Size(900, 600);
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.FromArgb(11, 11, 15);
+        BackColor = Color.FromArgb(13, 14, 18);
         ForeColor = Color.White;
         Font = new Font("Segoe UI", 10);
+        DoubleBuffered = true;
 
-        var title = new Label
-        {
-            Text = "OurSign",
-            Font = new Font("Segoe UI", 28, FontStyle.Bold),
-            ForeColor = Color.White,
-            AutoSize = true,
-            Location = new Point(35, 25)
-        };
+        int darkMode = 1;
+        DwmSetWindowAttribute(Handle, 20, ref darkMode, sizeof(int));
 
-        var subtitle = new Label
-        {
-            Text = "iOS sideloading",
-            ForeColor = Color.Gray,
-            AutoSize = true,
-            Location = new Point(38, 70)
-        };
-
-        Controls.Add(title);
-        Controls.Add(subtitle);
-
-        AddDeviceCard();
-        AddAccountCard();
-        AddIpaCard();
-        AddSigningCard();
-        AddLogCard();
-
+        BuildInterface();
         StartDeviceWatcher();
         CheckForIPhone();
-        CheckForITunes();
+    }
+
+    void BuildInterface()
+    {
+        var sidebar = new GlassPanel
+        {
+            Location = new Point(18, 18),
+            Size = new Size(215, 625),
+            Radius = 24
+        };
+
+        var logo = new Label
+        {
+            Text = "OurSigner",
+            Font = new Font("Segoe UI", 19, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(25, 25),
+            ForeColor = Color.White
+        };
+
+        var version = new Label
+        {
+            Text = "iOS sideloading",
+            Font = new Font("Segoe UI", 9),
+            AutoSize = true,
+            Location = new Point(27, 56),
+            ForeColor = Color.FromArgb(145, 147, 156)
+        };
+
+        sidebar.Controls.Add(logo);
+        sidebar.Controls.Add(version);
+
+        AddNavButton(sidebar, "Overview", 105, true);
+        AddNavButton(sidebar, "Devices", 155, false);
+        AddNavButton(sidebar, "Library", 205, false);
+        AddNavButton(sidebar, "Signing", 255, false);
+        AddNavButton(sidebar, "Settings", 305, false);
+
+        var footer = new Label
+        {
+            Text = "OurSigner",
+            Font = new Font("Segoe UI", 8),
+            AutoSize = true,
+            Location = new Point(27, 585),
+            ForeColor = Color.FromArgb(100, 102, 110)
+        };
+
+        sidebar.Controls.Add(footer);
+        Controls.Add(sidebar);
+
+        var heading = new Label
+        {
+            Text = "Overview",
+            Font = new Font("Segoe UI", 27, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(265, 28),
+            ForeColor = Color.White
+        };
+
+        var subheading = new Label
+        {
+            Text = "Everything you need to manage your iOS apps.",
+            Font = new Font("Segoe UI", 10),
+            AutoSize = true,
+            Location = new Point(269, 69),
+            ForeColor = Color.FromArgb(145, 147, 156)
+        };
+
+        Controls.Add(heading);
+        Controls.Add(subheading);
+
+        AddDeviceCard();
+        AddIpaCard();
+        AddSigningCard();
+        AddActivityCard();
+    }
+
+    void AddNavButton(Control parent, string text, int y, bool selected)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Location = new Point(14, y),
+            Size = new Size(187, 40),
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 10, selected ? FontStyle.Bold : FontStyle.Regular),
+            ForeColor = selected ? Color.White : Color.FromArgb(150, 152, 160),
+            BackColor = selected ? Color.FromArgb(55, 57, 66) : Color.Transparent,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(14, 0, 0, 0),
+            Cursor = Cursors.Hand
+        };
+
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(48, 50, 58);
+
+        parent.Controls.Add(button);
     }
 
     void AddDeviceCard()
     {
-        var card = CreateCard(35, 110, 560, 145);
+        var card = CreateGlassCard(265, 115, 340, 190);
 
-        card.Controls.Add(CreateLabel("📱  iPhone", 20, 18, 18, true));
+        AddCardTitle(card, "iPhone", 22, 20);
 
-        deviceStatus = CreateLabel(
-            "●  Waiting for iPhone...",
-            20, 55, 11, false
-        );
-
-        pairButton = new Button
+        deviceValue = new Label
         {
-            Text = "Pair iPhone",
-            Location = new Point(20, 88),
-            Width = 520,
-            Height = 35,
-            Enabled = false
+            Text = "Not connected",
+            Font = new Font("Segoe UI", 17, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(22, 65),
+            ForeColor = Color.FromArgb(190, 192, 200)
         };
 
-        pairButton.Click += (_, _) =>
+        var detail = new Label
         {
-            deviceStatus.Text = "●  iPhone connected";
-            deviceStatus.ForeColor = Color.LightGreen;
-            pairButton.Text = "Connected ✓";
-            pairButton.Enabled = false;
-            AddLog("iPhone connection detected.");
+            Text = "Connect your iPhone using USB.",
+            Font = new Font("Segoe UI", 9),
+            AutoSize = true,
+            Location = new Point(23, 99),
+            ForeColor = Color.FromArgb(125, 127, 135)
         };
 
-        card.Controls.Add(deviceStatus);
-        card.Controls.Add(pairButton);
-        Controls.Add(card);
-    }
+        var pair = CreateActionButton("Pair", 22, 137, 95, 34);
 
-    void AddAccountCard()
-    {
-        var card = CreateCard(35, 270, 560, 125);
-
-        card.Controls.Add(CreateLabel("🍎  Apple Account", 20, 18, 18, true));
-
-        accountStatus = CreateLabel(
-            "●  Not authenticated",
-            20, 55, 11, false
-        );
-
-        var button = new Button
+        pair.Click += (_, _) =>
         {
-            Text = "Authenticate with Apple",
-            Location = new Point(300, 48),
-            Width = 240,
-            Height = 35
+            deviceValue.Text = "Connected";
+            deviceValue.ForeColor = Color.LightGreen;
+            activityValue.Text = "iPhone connection confirmed.";
         };
 
-        button.Click += (_, _) =>
-        {
-            accountStatus.Text = "●  Apple authentication required";
-            accountStatus.ForeColor = Color.Gold;
-            AddLog("Apple authentication flow requested.");
-        };
-
-        card.Controls.Add(accountStatus);
-        card.Controls.Add(button);
+        card.Controls.Add(deviceValue);
+        card.Controls.Add(detail);
+        card.Controls.Add(pair);
         Controls.Add(card);
     }
 
     void AddIpaCard()
     {
-        var card = CreateCard(35, 410, 560, 155);
+        var card = CreateGlassCard(625, 115, 375, 190);
 
-        card.Controls.Add(CreateLabel("📦  IPA", 20, 18, 18, true));
+        AddCardTitle(card, "IPA", 22, 20);
 
-        ipaStatus = CreateLabel(
-            "No IPA selected",
-            20, 55, 11, false
-        );
-
-        ipaButton = new Button
+        ipaValue = new Label
         {
-            Text = "Choose IPA",
-            Location = new Point(20, 88),
-            Width = 250,
-            Height = 35
+            Text = "No app selected",
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(22, 65),
+            ForeColor = Color.FromArgb(190, 192, 200)
         };
 
-        installButton = new Button
-        {
-            Text = "Install IPA",
-            Location = new Point(290, 88),
-            Width = 250,
-            Height = 35,
-            Enabled = false
-        };
+        var choose = CreateActionButton("Choose IPA", 22, 105, 140, 36);
 
-        ipaButton.Click += (_, _) =>
+        choose.Click += (_, _) =>
         {
             using var dialog = new OpenFileDialog
             {
@@ -174,59 +212,121 @@ class MainForm : Form
 
             if (dialog.ShowDialog() == DialogResult.OK)
             {
-                selectedIpa = dialog.FileName;
-                ipaStatus.Text = Path.GetFileName(selectedIpa);
-                ipaStatus.ForeColor = Color.LightGreen;
+                ipaValue.Text = System.IO.Path.GetFileName(dialog.FileName);
+                ipaValue.ForeColor = Color.White;
                 installButton.Enabled = true;
-                AddLog("IPA selected: " + Path.GetFileName(selectedIpa));
+                activityValue.Text = "IPA selected.";
             }
         };
 
+        installButton = CreateActionButton("Install", 172, 105, 140, 36);
+        installButton.Enabled = false;
+
         installButton.Click += (_, _) =>
         {
-            if (string.IsNullOrEmpty(selectedIpa))
-                return;
-
-            AddLog("Install requested for " + Path.GetFileName(selectedIpa));
-            signingStatus.Text = "●  Ready for signing";
-            signingStatus.ForeColor = Color.LightGreen;
+            signingValue.Text = "Ready";
+            signingValue.ForeColor = Color.LightGreen;
+            activityValue.Text = "Signing workflow ready.";
         };
 
-        card.Controls.Add(ipaStatus);
-        card.Controls.Add(ipaButton);
+        card.Controls.Add(ipaValue);
+        card.Controls.Add(choose);
         card.Controls.Add(installButton);
         Controls.Add(card);
     }
 
     void AddSigningCard()
     {
-        var card = CreateCard(35, 580, 560, 100);
+        var card = CreateGlassCard(265, 325, 340, 150);
 
-        card.Controls.Add(CreateLabel("🔐  Signing", 20, 18, 18, true));
+        AddCardTitle(card, "Signing", 22, 20);
 
-        signingStatus = CreateLabel(
-            "●  Waiting for IPA",
-            20, 55, 11, false
-        );
+        signingValue = new Label
+        {
+            Text = "Waiting for IPA",
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(22, 67),
+            ForeColor = Color.FromArgb(190, 192, 200)
+        };
 
-        card.Controls.Add(signingStatus);
+        var detail = new Label
+        {
+            Text = "No signing operation running.",
+            Font = new Font("Segoe UI", 9),
+            AutoSize = true,
+            Location = new Point(23, 101),
+            ForeColor = Color.FromArgb(125, 127, 135)
+        };
+
+        card.Controls.Add(signingValue);
+        card.Controls.Add(detail);
         Controls.Add(card);
     }
 
-    void AddLogCard()
+    void AddActivityCard()
     {
-        var card = CreateCard(35, 695, 560, 85);
+        var card = CreateGlassCard(625, 325, 375, 150);
 
-        card.Controls.Add(CreateLabel("📋  Activity", 20, 12, 16, true));
+        AddCardTitle(card, "Activity", 22, 20);
 
-        logLabel = CreateLabel(
-            "OurSign ready.",
-            20, 43, 9, false
-        );
+        activityValue = new Label
+        {
+            Text = "OurSigner is ready.",
+            Font = new Font("Segoe UI", 10),
+            AutoSize = false,
+            Size = new Size(320, 55),
+            Location = new Point(22, 67),
+            ForeColor = Color.FromArgb(170, 172, 180)
+        };
 
-        logLabel.MaximumSize = new Size(520, 30);
-        card.Controls.Add(logLabel);
+        card.Controls.Add(activityValue);
         Controls.Add(card);
+    }
+
+    GlassPanel CreateGlassCard(int x, int y, int width, int height)
+    {
+        var panel = new GlassPanel
+        {
+            Location = new Point(x, y),
+            Size = new Size(width, height),
+            Radius = 24
+        };
+
+        Controls.Add(panel);
+        return panel;
+    }
+
+    void AddCardTitle(Control parent, string text, int x, int y)
+    {
+        parent.Controls.Add(new Label
+        {
+            Text = text,
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            AutoSize = true,
+            Location = new Point(x, y),
+            ForeColor = Color.White
+        });
+    }
+
+    Button CreateActionButton(string text, int x, int y, int width, int height)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Location = new Point(x, y),
+            Size = new Size(width, height),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(63, 65, 75),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(82, 84, 96);
+
+        return button;
     }
 
     void StartDeviceWatcher()
@@ -237,7 +337,8 @@ class MainForm : Form
 
         watcher.EventArrived += (_, _) =>
         {
-            BeginInvoke(CheckForIPhone);
+            if (!IsDisposed)
+                BeginInvoke(CheckForIPhone);
         };
 
         watcher.Start();
@@ -245,109 +346,44 @@ class MainForm : Form
 
     void CheckForIPhone()
     {
-        using var searcher = new ManagementObjectSearcher(
-            "SELECT Name, Manufacturer, PNPDeviceID FROM Win32_PnPEntity"
-        );
-
-        bool found = false;
-
-        foreach (ManagementObject device in searcher.Get())
+        try
         {
-            string name = device["Name"]?.ToString() ?? "";
-            string manufacturer = device["Manufacturer"]?.ToString() ?? "";
-            string pnpId = device["PNPDeviceID"]?.ToString() ?? "";
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Name, Manufacturer, PNPDeviceID FROM Win32_PnPEntity"
+            );
 
-            if (
-                name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("Apple Mobile Device", StringComparison.OrdinalIgnoreCase) ||
-                (
-                    manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
-                    pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
+            bool found = false;
+
+            foreach (ManagementObject device in searcher.Get())
+            {
+                string name = device["Name"]?.ToString() ?? "";
+                string manufacturer = device["Manufacturer"]?.ToString() ?? "";
+                string pnpId = device["PNPDeviceID"]?.ToString() ?? "";
+
+                if (
+                    name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Apple Mobile Device", StringComparison.OrdinalIgnoreCase) ||
+                    (
+                        manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
+                        pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
+                    )
                 )
-            )
+                {
+                    found = true;
+                    break;
+                }
+            }
+
+            if (found)
             {
-                found = true;
-                break;
+                deviceValue.Text = "iPhone detected";
+                deviceValue.ForeColor = Color.LightGreen;
+                activityValue.Text = "iPhone detected over USB.";
             }
         }
-
-        if (found)
+        catch
         {
-            deviceStatus.Text = "●  iPhone detected";
-            deviceStatus.ForeColor = Color.LightGreen;
-            pairButton.Enabled = true;
         }
-        else
-        {
-            deviceStatus.Text = "●  Waiting for iPhone...";
-            deviceStatus.ForeColor = Color.Gray;
-            pairButton.Enabled = false;
-        }
-    }
-
-    void CheckForITunes()
-    {
-        string[] paths =
-        {
-            @"C:\Program Files\iTunes\iTunes.exe",
-            @"C:\Program Files (x86)\iTunes\iTunes.exe"
-        };
-
-        bool installed = false;
-
-        foreach (string path in paths)
-        {
-            if (File.Exists(path))
-            {
-                installed = true;
-                break;
-            }
-        }
-
-        var card = CreateCard(35, 795, 560, 80);
-
-        card.Controls.Add(CreateLabel("🍎  iTunes", 20, 12, 16, true));
-
-        itunesStatus = CreateLabel(
-            installed ? "●  iTunes detected" : "●  iTunes required",
-            20, 43, 10, false
-        );
-
-        itunesStatus.ForeColor = installed ? Color.LightGreen : Color.OrangeRed;
-
-        card.Controls.Add(itunesStatus);
-        Controls.Add(card);
-    }
-
-    void AddLog(string message)
-    {
-        logLabel.Text = message;
-    }
-
-    Panel CreateCard(int x, int y, int width, int height)
-    {
-        return new Panel
-        {
-            Location = new Point(x, y),
-            Size = new Size(width, height),
-            BackColor = Color.FromArgb(32, 32, 39)
-        };
-    }
-
-    Label CreateLabel(string text, int x, int y, int size, bool bold)
-    {
-        return new Label
-        {
-            Text = text,
-            Location = new Point(x, y),
-            AutoSize = true,
-            ForeColor = Color.White,
-            Font = new Font(
-                "Segoe UI",
-                size,
-                bold ? FontStyle.Bold : FontStyle.Regular
-            )
-        };
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
@@ -355,5 +391,42 @@ class MainForm : Form
         watcher?.Stop();
         watcher?.Dispose();
         base.OnFormClosed(e);
+    }
+}
+
+class GlassPanel : Panel
+{
+    public int Radius { get; set; } = 24;
+
+    public GlassPanel()
+    {
+        DoubleBuffered = true;
+        BackColor = Color.FromArgb(25, 27, 33);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+        using var path = RoundedPath(new Rectangle(0, 0, Width - 1, Height - 1), Radius);
+        using var brush = new SolidBrush(Color.FromArgb(25, 27, 33));
+        using var border = new Pen(Color.FromArgb(55, 57, 65), 1);
+
+        e.Graphics.FillPath(brush, path);
+        e.Graphics.DrawPath(border, path);
+    }
+
+    GraphicsPath RoundedPath(Rectangle rectangle, int radius)
+    {
+        var path = new GraphicsPath();
+        int diameter = radius * 2;
+
+        path.AddArc(rectangle.X, rectangle.Y, diameter, diameter, 180, 90);
+        path.AddArc(rectangle.Right - diameter, rectangle.Y, diameter, diameter, 270, 90);
+        path.AddArc(rectangle.Right - diameter, rectangle.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(rectangle.X, rectangle.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+
+        return path;
     }
 }
