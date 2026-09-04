@@ -1,78 +1,110 @@
 using System;
-using System.Management;
+using System.Collections.Generic;
 
 namespace OurSigner;
 
 class Program
 {
+    static readonly List<Certificate> Certificates = new();
+
     static void Main()
     {
         Console.Title = "OurSigner";
-        Console.WriteLine("OurSigner");
-        Console.WriteLine("iPhone USB Detection");
-        Console.WriteLine();
 
-        CheckForIPhone();
-
-        using var watcher = new ManagementEventWatcher(
-            new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent")
-        );
-
-        watcher.EventArrived += (_, _) =>
+        while (true)
         {
-            System.Threading.Thread.Sleep(1000);
-            CheckForIPhone();
-        };
+            Console.Clear();
+            Console.WriteLine("OurSigner");
+            Console.WriteLine("────────────────────────");
+            Console.WriteLine();
+            Console.WriteLine("1. Apple Account");
+            Console.WriteLine("2. Certificates");
+            Console.WriteLine("3. iPhone");
+            Console.WriteLine("4. Exit");
+            Console.WriteLine();
+            Console.Write("Select: ");
 
-        watcher.Start();
+            string choice = Console.ReadLine() ?? "";
 
-        Console.WriteLine("Waiting for an iPhone...");
-        Console.WriteLine("Connect an iPhone using USB-A or USB-C.");
-        Console.WriteLine();
-        Console.WriteLine("Press Enter to exit.");
+            switch (choice)
+            {
+                case "1":
+                    AppleAccount();
+                    break;
 
-        Console.ReadLine();
+                case "2":
+                    CertificateManager();
+                    break;
 
-        watcher.Stop();
+                case "3":
+                    IPhone();
+                    break;
+
+                case "4":
+                    return;
+            }
+        }
     }
 
-    static void CheckForIPhone()
+    static void AppleAccount()
     {
-        using var searcher = new ManagementObjectSearcher(
-            "SELECT Name, Manufacturer, PNPDeviceID FROM Win32_PnPEntity"
-        );
+        Console.Clear();
+        Console.WriteLine("Apple Account");
+        Console.WriteLine("────────────────────────");
+        Console.WriteLine();
+        Console.WriteLine("Status: Not signed in");
+        Console.WriteLine();
+        Console.WriteLine("OurSigner will use Apple's authentication");
+        Console.WriteLine("system instead of collecting your password.");
+        Console.WriteLine();
+        Console.WriteLine("Press Enter to return.");
+        Console.ReadLine();
+    }
 
-        bool found = false;
+    static void CertificateManager()
+    {
+        Console.Clear();
+        Console.WriteLine("Certificates");
+        Console.WriteLine("────────────────────────");
+        Console.WriteLine();
 
-        foreach (ManagementObject device in searcher.Get())
+        if (Certificates.Count == 0)
         {
-            string name = device["Name"]?.ToString() ?? "";
-            string manufacturer = device["Manufacturer"]?.ToString() ?? "";
-            string pnpId = device["PNPDeviceID"]?.ToString() ?? "";
-
-            if (
-                name.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("Apple Mobile Device", StringComparison.OrdinalIgnoreCase) ||
-                (
-                    manufacturer.Contains("Apple", StringComparison.OrdinalIgnoreCase) &&
-                    pnpId.Contains("VID_05AC", StringComparison.OrdinalIgnoreCase)
-                )
-            )
+            Console.WriteLine("No signing certificates available.");
+        }
+        else
+        {
+            foreach (var certificate in Certificates)
             {
-                found = true;
-
-                Console.WriteLine("================================");
-                Console.WriteLine("📱 IPHONE CONNECTED");
-                Console.WriteLine("================================");
-                Console.WriteLine($"Device: {name}");
-                Console.WriteLine($"Manufacturer: {manufacturer}");
+                Console.WriteLine($"Name: {certificate.Name}");
+                Console.WriteLine($"Type: {certificate.Type}");
+                Console.WriteLine($"Status: {certificate.Status}");
                 Console.WriteLine();
             }
         }
 
-        if (!found)
-        {
-            Console.WriteLine("❌ iPhone not detected.");
-        }
+        Console.WriteLine("Press Enter to return.");
+        Console.ReadLine();
+    }
+
+    static void IPhone()
+    {
+        Console.Clear();
+        Console.WriteLine("iPhone");
+        Console.WriteLine("────────────────────────");
+        Console.WriteLine();
+        Console.WriteLine("Status: Waiting for iPhone...");
+        Console.WriteLine();
+        Console.WriteLine("Connect your iPhone with USB.");
+        Console.WriteLine();
+        Console.WriteLine("Press Enter to return.");
+        Console.ReadLine();
+    }
+
+    class Certificate
+    {
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string Status { get; set; } = "";
     }
 }
