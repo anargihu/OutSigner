@@ -9,5 +9,7 @@
     <AssemblyName>OurSigner</AssemblyName>
     <RootNamespace>OurSigner</RootNamespace>
   </PropertyGroup>
-
+<ItemGroup>
+  <PackageReference Include="System.Management" Version="9.0.9" />
+</ItemGroup>
 </Project>
