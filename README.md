@@ -48,4 +48,10 @@ Executable:
 
 ## Status
 
+## Platform Support
+
+- 🪟 Windows 10/11 (64-bit) — ✅ Supported
+- 🍎 macOS — 🚧 Not supported yet
+- 🐧 Linux — ❌ Not supported
+
 🚧 **OurSigner is currently in development.**
