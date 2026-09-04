@@ -8,7 +8,7 @@ The installed iOS app is called **OurSign**.
 
 - Windows 10/11
 - **64-bit (x64) Windows**
-- iPhone
+- iPhone with a Lockscreen Code
 - USB cable
 - iTunes installed from Apple
 - Apple Account
