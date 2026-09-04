@@ -50,6 +50,7 @@ Executable:
 
 - 🪟 Windows 10/11 (64-bit) — ✅ Supported
 - 🍎 macOS — 🚧 Not supported yet
-- 🐧 Linux — ❌ Not supported
+- 🐧 Linux — ❌ Windows Build MIGHT Work eith Wine
+> Wine Lets You Allow to Run Windows Program in Linux
 
 🚧 **OurSigner is currently in development.**
