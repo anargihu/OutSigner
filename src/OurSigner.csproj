@@ -1,15 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AssemblyName>OurSigner</AssemblyName>
     <RootNamespace>OurSigner</RootNamespace>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
-<ItemGroup>
-  <PackageReference Include="System.Management" Version="9.0.9" />
-</ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Management" Version="9.0.9" />
+  </ItemGroup>
+
 </Project>
