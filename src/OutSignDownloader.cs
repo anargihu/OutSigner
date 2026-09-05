@@ -6,7 +6,11 @@ public static class OurSignDownloader
 {
     private static readonly HttpClient Client = new();
 
-    public static async Task<string> DownloadAsync(string url, IProgress<int>? progress = null)
+    private const string OurSignUrl =
+        "https://github.com/anargihu/OurSign/releases/download/Test/OurSign-0.0.1.ipa";
+
+    public static async Task<string> DownloadAsync(
+        IProgress<int>? progress = null)
     {
         string folder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -16,10 +20,13 @@ public static class OurSignDownloader
 
         Directory.CreateDirectory(folder);
 
-        string path = Path.Combine(folder, "OurSign-0.0.1.ipa");
+        string path = Path.Combine(
+            folder,
+            "OurSign-0.0.1.ipa"
+        );
 
         using HttpResponseMessage response = await Client.GetAsync(
-            url,
+            OurSignUrl,
             HttpCompletionOption.ResponseHeadersRead
         );
 
@@ -28,6 +35,7 @@ public static class OurSignDownloader
         long? total = response.Content.Headers.ContentLength;
 
         await using Stream input = await response.Content.ReadAsStreamAsync();
+
         await using FileStream output = new(
             path,
             FileMode.Create,
@@ -46,7 +54,9 @@ public static class OurSignDownloader
 
             if (total.HasValue && total.Value > 0)
             {
-                progress?.Report((int)(downloaded * 100 / total.Value));
+                progress?.Report(
+                    (int)(downloaded * 100 / total.Value)
+                );
             }
         }
 
