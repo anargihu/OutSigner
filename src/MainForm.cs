@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace OurSigner;
@@ -17,6 +18,13 @@ public class MainForm : Form
     Label activityStatus = new();
     Label ipaStatus = new();
 
+    [DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(
+        IntPtr hwnd,
+        int attribute,
+        ref int value,
+        int attributeSize);
+
     public MainForm()
     {
         Text = "OurSigner";
@@ -29,8 +37,28 @@ public class MainForm : Form
         Font = new Font("Segoe UI", 10);
         DoubleBuffered = true;
 
+        ApplyWindowStyle();
         BuildUI();
         RefreshStatus();
+    }
+
+    void ApplyWindowStyle()
+    {
+        const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        const int DWMWCP_ROUND = 2;
+
+        try
+        {
+            int preference = DWMWCP_ROUND;
+            DwmSetWindowAttribute(
+                Handle,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                ref preference,
+                sizeof(int));
+        }
+        catch
+        {
+        }
     }
 
     void BuildUI()
@@ -59,37 +87,6 @@ public class MainForm : Form
             Location = new Point(27, 58),
             ForeColor = Color.FromArgb(135, 138, 148)
         });
-
-        string[] items =
-        {
-            "Overview",
-            "Devices",
-            "Apps",
-            "Signing",
-            "Settings"
-        };
-
-        for (int i = 0; i < items.Length; i++)
-        {
-            var button = new Button
-            {
-                Text = items[i],
-                Location = new Point(14, 110 + i * 48),
-                Size = new Size(192, 40),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = i == 0 ? Color.FromArgb(48, 50, 58) : Color.Transparent,
-                ForeColor = i == 0 ? Color.White : Color.FromArgb(145, 148, 158),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(14, 0, 0, 0),
-                Font = new Font("Segoe UI", 10, i == 0 ? FontStyle.Bold : FontStyle.Regular),
-                Cursor = Cursors.Hand
-            };
-
-            button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(55, 57, 65);
-
-            sidebar.Controls.Add(button);
-        }
 
         Controls.Add(sidebar);
 
@@ -231,8 +228,7 @@ public class MainForm : Form
             using var pen = new Pen(Color.FromArgb(70, 72, 82), 1);
             using var path = RoundedRectangle(
                 new Rectangle(0, 0, dropArea.Width - 1, dropArea.Height - 1),
-                15
-            );
+                15);
 
             e.Graphics.DrawPath(pen, path);
         };
