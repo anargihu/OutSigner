@@ -11,12 +11,14 @@ public class MainForm : Form
     readonly DeviceManager deviceManager = new();
     readonly ITunesManager iTunesManager = new();
     readonly IPAManager ipaManager = new();
+    readonly SigningManager signingManager = new();
 
     Label deviceStatus = new();
     Label itunesStatus = new();
     Label ourSignStatus = new();
     Label activityStatus = new();
     Label ipaStatus = new();
+    Label signingStatus = new();
 
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(
@@ -95,7 +97,8 @@ public class MainForm : Form
             Location = new Point(260, 18),
             Size = new Size(ClientSize.Width - 278, ClientSize.Height - 36),
             Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            BackColor = Color.Transparent
+            BackColor = Color.Transparent,
+            AutoScroll = true
         };
 
         main.Controls.Add(new Label
@@ -118,6 +121,7 @@ public class MainForm : Form
         AddDeviceCard(main);
         AddOurSignCard(main);
         AddIpaCard(main);
+        AddSigningCard(main);
         AddActivityCard(main);
         AddSystemCard(main);
 
@@ -153,7 +157,8 @@ public class MainForm : Form
         refresh.Click += (_, _) =>
         {
             RefreshStatus();
-            activityStatus.Text = "Device status refreshed.";
+            RefreshSigningStatus();
+            activityStatus.Text = "Device and signing status refreshed.";
         };
 
         card.Controls.Add(refresh);
@@ -201,8 +206,19 @@ public class MainForm : Form
                 return;
             }
 
-            activityStatus.Text = "OurSign installation workflow started.";
-            ourSignStatus.Text = "Installing...";
+            SigningResult result = signingManager.PrepareSigning();
+
+            if (!result.Ready)
+            {
+                activityStatus.Text = result.Message;
+                ourSignStatus.Text = "Not ready";
+                ourSignStatus.ForeColor = Color.FromArgb(255, 180, 90);
+                return;
+            }
+
+            activityStatus.Text = "Signing requirements are ready.";
+            ourSignStatus.Text = "Ready to sign";
+            ourSignStatus.ForeColor = Color.LightGreen;
         };
 
         card.Controls.Add(install);
@@ -269,9 +285,37 @@ public class MainForm : Form
         parent.Controls.Add(card);
     }
 
+    void AddSigningCard(Panel parent)
+    {
+        var card = CreateCard(5, 496, 783, 185);
+        AddTitle(card, "Signing", 22, 20);
+
+        signingStatus = new Label
+        {
+            Text = "Checking...",
+            AutoSize = false,
+            Size = new Size(700, 70),
+            Location = new Point(22, 58),
+            ForeColor = Color.FromArgb(170, 173, 183)
+        };
+
+        card.Controls.Add(signingStatus);
+
+        var refresh = ActionButton("Check Signing", 22, 135, 140, 34);
+
+        refresh.Click += (_, _) =>
+        {
+            RefreshSigningStatus();
+            activityStatus.Text = "Signing requirements checked.";
+        };
+
+        card.Controls.Add(refresh);
+        parent.Controls.Add(card);
+    }
+
     void AddActivityCard(Panel parent)
     {
-        var card = CreateCard(5, 501, 500, 125);
+        var card = CreateCard(5, 699, 500, 125);
         AddTitle(card, "Activity", 22, 20);
 
         activityStatus = new Label
@@ -289,7 +333,7 @@ public class MainForm : Form
 
     void AddSystemCard(Panel parent)
     {
-        var card = CreateCard(523, 501, 265, 125);
+        var card = CreateCard(523, 699, 265, 125);
         AddTitle(card, "System", 22, 20);
 
         itunesStatus = new Label
@@ -375,6 +419,41 @@ public class MainForm : Form
         {
             itunesStatus.Text = "iTunes required";
             itunesStatus.ForeColor = Color.FromArgb(255, 180, 90);
+        }
+    }
+
+    void RefreshSigningStatus()
+    {
+        try
+        {
+            string? deviceIdentifier = null;
+
+            SigningResult result =
+                signingManager.PrepareSigning(deviceIdentifier);
+
+            if (result.Ready)
+            {
+                signingStatus.Text =
+                    $"Ready to sign\nCertificate: {result.CertificateSubject}\nProfile: {System.IO.Path.GetFileName(result.ProvisioningProfilePath)}";
+
+                signingStatus.ForeColor = Color.LightGreen;
+                ourSignStatus.Text = "Signing ready";
+                ourSignStatus.ForeColor = Color.LightGreen;
+            }
+            else
+            {
+                signingStatus.Text = result.Message;
+                signingStatus.ForeColor = Color.FromArgb(255, 180, 90);
+                ourSignStatus.Text = "Not ready";
+                ourSignStatus.ForeColor = Color.FromArgb(255, 180, 90);
+            }
+        }
+        catch (Exception ex)
+        {
+            signingStatus.Text = $"Signing check failed: {ex.Message}";
+            signingStatus.ForeColor = Color.FromArgb(255, 120, 120);
+            ourSignStatus.Text = "Check failed";
+            ourSignStatus.ForeColor = Color.FromArgb(255, 120, 120);
         }
     }
 
