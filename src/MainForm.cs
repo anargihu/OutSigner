@@ -13,6 +13,7 @@ public class MainForm : Form
     readonly IPAManager ipaManager = new();
     readonly SigningManager signingManager = new();
     readonly SigningPipeline signingPipeline = new();
+    readonly OurSignInstaller installer = new();
 
     Label deviceStatus = new();
     Label itunesStatus = new();
@@ -73,7 +74,9 @@ public class MainForm : Form
             Location = new Point(18, 18),
             Size = new Size(220, ClientSize.Height - 36),
             Radius = 24,
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left
+            Anchor = AnchorStyles.Top |
+                     AnchorStyles.Bottom |
+                     AnchorStyles.Left
         };
 
         sidebar.Controls.Add(new Label
@@ -211,73 +214,125 @@ public class MainForm : Form
             170,
             34);
 
-        install.Click += (_, _) =>
+        install.Click += async (_, _) =>
         {
-            if (!deviceManager.IsIPhoneConnected())
+            install.Enabled = false;
+
+            try
             {
-                ourSignStatus.Text = "iPhone required";
-                ourSignStatus.ForeColor =
-                    Color.FromArgb(255, 180, 90);
+                ourSignStatus.Text = "Checking...";
+                ourSignStatus.ForeColor = Color.White;
+
+                if (!deviceManager.IsIPhoneConnected())
+                {
+                    BlockInstallation(
+                        "Connect an iPhone first.",
+                        "iPhone required");
+
+                    return;
+                }
+
+                if (!iTunesManager.IsInstalled())
+                {
+                    BlockInstallation(
+                        "iTunes is required.",
+                        "iTunes required");
+
+                    return;
+                }
+
+                if (!ipaManager.HasIPA())
+                {
+                    BlockInstallation(
+                        "Select an IPA first.",
+                        "IPA required");
+
+                    return;
+                }
+
+                SigningPipelineResult validation =
+                    signingPipeline.Prepare(
+                        ipaManager.SelectedIPA!
+                    );
+
+                if (!validation.Success)
+                {
+                    BlockInstallation(
+                        validation.Status,
+                        "Signing not ready");
+
+                    RefreshSigningStatus();
+                    return;
+                }
+
+                if (!installer.IsAvailable())
+                {
+                    BlockInstallation(
+                        "The iOS installation backend is not available.",
+                        "Installer required");
+
+                    return;
+                }
+
+                ourSignStatus.Text = "Installing...";
+                ourSignStatus.ForeColor = Color.White;
 
                 activityStatus.Text =
-                    "Install blocked: connect an iPhone first.";
+                    "All prerequisites passed. Installing OurSign...";
 
-                return;
-            }
+                InstallationResult installation =
+                    await installer.InstallAsync(
+                        ipaManager.SelectedIPA!
+                    );
 
-            if (!iTunesManager.IsInstalled())
-            {
-                ourSignStatus.Text = "iTunes required";
+                if (!installation.Success)
+                {
+                    ourSignStatus.Text = "Install failed";
+                    ourSignStatus.ForeColor =
+                        Color.FromArgb(255, 120, 120);
+
+                    activityStatus.Text =
+                        installation.Message;
+
+                    return;
+                }
+
+                ourSignStatus.Text = "Installed";
                 ourSignStatus.ForeColor =
-                    Color.FromArgb(255, 180, 90);
+                    Color.LightGreen;
 
                 activityStatus.Text =
-                    "Install blocked: iTunes is required.";
-
-                return;
+                    installation.Message;
             }
-
-            if (!ipaManager.HasIPA())
+            catch (Exception ex)
             {
-                ourSignStatus.Text = "IPA required";
+                ourSignStatus.Text = "Install failed";
                 ourSignStatus.ForeColor =
-                    Color.FromArgb(255, 180, 90);
+                    Color.FromArgb(255, 120, 120);
 
                 activityStatus.Text =
-                    "Install blocked: select an IPA first.";
-
-                return;
+                    $"Installation failed: {ex.Message}";
             }
-
-            SigningPipelineResult result =
-                signingPipeline.Prepare(
-                    ipaManager.SelectedIPA!
-                );
-
-            if (!result.Success)
+            finally
             {
-                ourSignStatus.Text = "Not ready";
-                ourSignStatus.ForeColor =
-                    Color.FromArgb(255, 180, 90);
-
-                activityStatus.Text =
-                    $"Install blocked: {result.Status}";
-
-                RefreshSigningStatus();
-                return;
+                install.Enabled = true;
             }
-
-            ourSignStatus.Text = "Ready to sign";
-            ourSignStatus.ForeColor = Color.LightGreen;
-
-            activityStatus.Text =
-                "All prerequisites passed. Ready for signing.";
-
-            RefreshSigningStatus();
         };
 
         card.Controls.Add(install);
         parent.Controls.Add(card);
+    }
+
+    void BlockInstallation(
+        string message,
+        string status)
+    {
+        ourSignStatus.Text = status;
+        ourSignStatus.ForeColor =
+            Color.FromArgb(255, 180, 90);
+
+        activityStatus.Text =
+            $"Install blocked: {message}";
     }
 
     void AddIpaCard(Panel parent)
