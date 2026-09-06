@@ -1,25 +1,35 @@
-using System.IO;
-
 namespace OurSigner;
 
-public class IPAManager
+public sealed class IPAManager
 {
     public string? SelectedIPA { get; private set; }
 
     public bool SelectIPA(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
         if (!File.Exists(path))
             return false;
 
-        if (!Path.GetExtension(path).Equals(".ipa", System.StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(
+                Path.GetExtension(path),
+                ".ipa",
+                StringComparison.OrdinalIgnoreCase))
             return false;
 
         SelectedIPA = path;
         return true;
     }
 
-    public void Clear()
+    public void ClearIPA()
     {
         SelectedIPA = null;
+    }
+
+    public bool HasIPA()
+    {
+        return !string.IsNullOrWhiteSpace(SelectedIPA)
+            && File.Exists(SelectedIPA);
     }
 }
