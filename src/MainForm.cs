@@ -12,6 +12,7 @@ public class MainForm : Form
     readonly ITunesManager iTunesManager = new();
     readonly IPAManager ipaManager = new();
     readonly SigningManager signingManager = new();
+    readonly SigningPipeline signingPipeline = new();
 
     Label deviceStatus = new();
     Label itunesStatus = new();
@@ -42,6 +43,7 @@ public class MainForm : Form
         ApplyWindowStyle();
         BuildUI();
         RefreshStatus();
+        RefreshSigningStatus();
     }
 
     void ApplyWindowStyle()
@@ -52,6 +54,7 @@ public class MainForm : Form
         try
         {
             int preference = DWMWCP_ROUND;
+
             DwmSetWindowAttribute(
                 Handle,
                 DWMWA_WINDOW_CORNER_PREFERENCE,
@@ -95,8 +98,13 @@ public class MainForm : Form
         var main = new Panel
         {
             Location = new Point(260, 18),
-            Size = new Size(ClientSize.Width - 278, ClientSize.Height - 36),
-            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+            Size = new Size(
+                ClientSize.Width - 278,
+                ClientSize.Height - 36),
+            Anchor = AnchorStyles.Top |
+                     AnchorStyles.Bottom |
+                     AnchorStyles.Left |
+                     AnchorStyles.Right,
             BackColor = Color.Transparent,
             AutoScroll = true
         };
@@ -152,13 +160,19 @@ public class MainForm : Form
             ForeColor = Color.FromArgb(125, 128, 138)
         });
 
-        var refresh = ActionButton("Refresh", 22, 137, 110, 34);
+        var refresh = ActionButton(
+            "Refresh",
+            22,
+            137,
+            110,
+            34);
 
         refresh.Click += (_, _) =>
         {
             RefreshStatus();
             RefreshSigningStatus();
-            activityStatus.Text = "Device and signing status refreshed.";
+            activityStatus.Text =
+                "Device and signing status refreshed.";
         };
 
         card.Controls.Add(refresh);
@@ -172,7 +186,7 @@ public class MainForm : Form
 
         ourSignStatus = new Label
         {
-            Text = "Ready",
+            Text = "Checking...",
             Font = new Font("Segoe UI", 18, FontStyle.Bold),
             AutoSize = true,
             Location = new Point(22, 65),
@@ -190,35 +204,76 @@ public class MainForm : Form
             ForeColor = Color.FromArgb(125, 128, 138)
         });
 
-        var install = ActionButton("Install OurSign", 22, 137, 170, 34);
+        var install = ActionButton(
+            "Install OurSign",
+            22,
+            137,
+            170,
+            34);
 
         install.Click += (_, _) =>
         {
             if (!deviceManager.IsIPhoneConnected())
             {
-                activityStatus.Text = "Connect an iPhone first.";
+                ourSignStatus.Text = "iPhone required";
+                ourSignStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
+
+                activityStatus.Text =
+                    "Install blocked: connect an iPhone first.";
+
                 return;
             }
 
             if (!iTunesManager.IsInstalled())
             {
-                activityStatus.Text = "iTunes is required.";
+                ourSignStatus.Text = "iTunes required";
+                ourSignStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
+
+                activityStatus.Text =
+                    "Install blocked: iTunes is required.";
+
                 return;
             }
 
-            SigningResult result = signingManager.PrepareSigning();
-
-            if (!result.Ready)
+            if (!ipaManager.HasIPA())
             {
-                activityStatus.Text = result.Message;
-                ourSignStatus.Text = "Not ready";
-                ourSignStatus.ForeColor = Color.FromArgb(255, 180, 90);
+                ourSignStatus.Text = "IPA required";
+                ourSignStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
+
+                activityStatus.Text =
+                    "Install blocked: select an IPA first.";
+
                 return;
             }
 
-            activityStatus.Text = "Signing requirements are ready.";
+            SigningPipelineResult result =
+                signingPipeline.Prepare(
+                    ipaManager.SelectedIPA!
+                );
+
+            if (!result.Success)
+            {
+                ourSignStatus.Text = "Not ready";
+                ourSignStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
+
+                activityStatus.Text =
+                    $"Install blocked: {result.Status}";
+
+                RefreshSigningStatus();
+                return;
+            }
+
             ourSignStatus.Text = "Ready to sign";
             ourSignStatus.ForeColor = Color.LightGreen;
+
+            activityStatus.Text =
+                "All prerequisites passed. Ready for signing.";
+
+            RefreshSigningStatus();
         };
 
         card.Controls.Add(install);
@@ -239,12 +294,22 @@ public class MainForm : Form
 
         dropArea.Paint += (_, e) =>
         {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.SmoothingMode =
+                SmoothingMode.AntiAlias;
 
-            using var pen = new Pen(Color.FromArgb(70, 72, 82), 1);
-            using var path = RoundedRectangle(
-                new Rectangle(0, 0, dropArea.Width - 1, dropArea.Height - 1),
-                15);
+            using var pen =
+                new Pen(
+                    Color.FromArgb(70, 72, 82),
+                    1);
+
+            using var path =
+                RoundedRectangle(
+                    new Rectangle(
+                        0,
+                        0,
+                        dropArea.Width - 1,
+                        dropArea.Height - 1),
+                    15);
 
             e.Graphics.DrawPath(pen, path);
         };
@@ -260,7 +325,12 @@ public class MainForm : Form
         dropArea.Controls.Add(ipaStatus);
         card.Controls.Add(dropArea);
 
-        var choose = ActionButton("Choose IPA", 22, 140, 125, 34);
+        var choose = ActionButton(
+            "Choose IPA",
+            22,
+            140,
+            125,
+            34);
 
         choose.Click += (_, _) =>
         {
@@ -270,15 +340,30 @@ public class MainForm : Form
                 Title = "Select IPA"
             };
 
-            if (dialog.ShowDialog() == DialogResult.OK)
+            if (dialog.ShowDialog() != DialogResult.OK)
+                return;
+
+            if (!ipaManager.SelectIPA(dialog.FileName))
             {
-                if (ipaManager.SelectIPA(dialog.FileName))
-                {
-                    ipaStatus.Text = System.IO.Path.GetFileName(dialog.FileName);
-                    ipaStatus.ForeColor = Color.White;
-                    activityStatus.Text = "IPA selected.";
-                }
+                ipaStatus.Text = "Invalid IPA";
+                ipaStatus.ForeColor =
+                    Color.FromArgb(255, 120, 120);
+
+                activityStatus.Text =
+                    "The selected file is not a valid IPA.";
+
+                return;
             }
+
+            ipaStatus.Text =
+                System.IO.Path.GetFileName(dialog.FileName);
+
+            ipaStatus.ForeColor = Color.White;
+
+            activityStatus.Text =
+                "IPA selected.";
+
+            RefreshSigningStatus();
         };
 
         card.Controls.Add(choose);
@@ -301,12 +386,18 @@ public class MainForm : Form
 
         card.Controls.Add(signingStatus);
 
-        var refresh = ActionButton("Check Signing", 22, 135, 140, 34);
+        var refresh = ActionButton(
+            "Check Signing",
+            22,
+            135,
+            140,
+            34);
 
         refresh.Click += (_, _) =>
         {
             RefreshSigningStatus();
-            activityStatus.Text = "Signing requirements checked.";
+            activityStatus.Text =
+                "Signing requirements checked.";
         };
 
         card.Controls.Add(refresh);
@@ -349,7 +440,11 @@ public class MainForm : Form
         parent.Controls.Add(card);
     }
 
-    GlassPanel CreateCard(int x, int y, int width, int height)
+    GlassPanel CreateCard(
+        int x,
+        int y,
+        int width,
+        int height)
     {
         return new GlassPanel
         {
@@ -359,18 +454,30 @@ public class MainForm : Form
         };
     }
 
-    void AddTitle(Control parent, string text, int x, int y)
+    void AddTitle(
+        Control parent,
+        string text,
+        int x,
+        int y)
     {
         parent.Controls.Add(new Label
         {
             Text = text,
-            Font = new Font("Segoe UI", 12, FontStyle.Bold),
+            Font = new Font(
+                "Segoe UI",
+                12,
+                FontStyle.Bold),
             AutoSize = true,
             Location = new Point(x, y)
         });
     }
 
-    Button ActionButton(string text, int x, int y, int width, int height)
+    Button ActionButton(
+        string text,
+        int x,
+        int y,
+        int width,
+        int height)
     {
         var button = new Button
         {
@@ -380,12 +487,16 @@ public class MainForm : Form
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(65, 67, 77),
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            Font = new Font(
+                "Segoe UI",
+                9,
+                FontStyle.Bold),
             Cursor = Cursors.Hand
         };
 
         button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(82, 84, 95);
+        button.FlatAppearance.MouseOverBackColor =
+            Color.FromArgb(82, 84, 95);
 
         return button;
     }
@@ -402,12 +513,15 @@ public class MainForm : Form
             else
             {
                 deviceStatus.Text = "Not connected";
-                deviceStatus.ForeColor = Color.FromArgb(190, 192, 200);
+                deviceStatus.ForeColor =
+                    Color.FromArgb(190, 192, 200);
             }
         }
         catch
         {
             deviceStatus.Text = "Unable to check";
+            deviceStatus.ForeColor =
+                Color.FromArgb(255, 120, 120);
         }
 
         if (iTunesManager.IsInstalled())
@@ -418,7 +532,8 @@ public class MainForm : Form
         else
         {
             itunesStatus.Text = "iTunes required";
-            itunesStatus.ForeColor = Color.FromArgb(255, 180, 90);
+            itunesStatus.ForeColor =
+                Color.FromArgb(255, 180, 90);
         }
     }
 
@@ -429,43 +544,93 @@ public class MainForm : Form
             string? deviceIdentifier = null;
 
             SigningResult result =
-                signingManager.PrepareSigning(deviceIdentifier);
+                signingManager.PrepareSigning(
+                    deviceIdentifier);
 
             if (result.Ready)
             {
                 signingStatus.Text =
                     $"Ready to sign\nCertificate: {result.CertificateSubject}\nProfile: {System.IO.Path.GetFileName(result.ProvisioningProfilePath)}";
 
-                signingStatus.ForeColor = Color.LightGreen;
-                ourSignStatus.Text = "Signing ready";
-                ourSignStatus.ForeColor = Color.LightGreen;
+                signingStatus.ForeColor =
+                    Color.LightGreen;
+
+                ourSignStatus.Text =
+                    "Signing ready";
+
+                ourSignStatus.ForeColor =
+                    Color.LightGreen;
             }
             else
             {
-                signingStatus.Text = result.Message;
-                signingStatus.ForeColor = Color.FromArgb(255, 180, 90);
-                ourSignStatus.Text = "Not ready";
-                ourSignStatus.ForeColor = Color.FromArgb(255, 180, 90);
+                signingStatus.Text =
+                    result.Message;
+
+                signingStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
+
+                ourSignStatus.Text =
+                    "Not ready";
+
+                ourSignStatus.ForeColor =
+                    Color.FromArgb(255, 180, 90);
             }
         }
         catch (Exception ex)
         {
-            signingStatus.Text = $"Signing check failed: {ex.Message}";
-            signingStatus.ForeColor = Color.FromArgb(255, 120, 120);
-            ourSignStatus.Text = "Check failed";
-            ourSignStatus.ForeColor = Color.FromArgb(255, 120, 120);
+            signingStatus.Text =
+                $"Signing check failed: {ex.Message}";
+
+            signingStatus.ForeColor =
+                Color.FromArgb(255, 120, 120);
+
+            ourSignStatus.Text =
+                "Check failed";
+
+            ourSignStatus.ForeColor =
+                Color.FromArgb(255, 120, 120);
         }
     }
 
-    GraphicsPath RoundedRectangle(Rectangle rectangle, int radius)
+    GraphicsPath RoundedRectangle(
+        Rectangle rectangle,
+        int radius)
     {
         var path = new GraphicsPath();
         int d = radius * 2;
 
-        path.AddArc(rectangle.X, rectangle.Y, d, d, 180, 90);
-        path.AddArc(rectangle.Right - d, rectangle.Y, d, d, 270, 90);
-        path.AddArc(rectangle.Right - d, rectangle.Bottom - d, d, d, 0, 90);
-        path.AddArc(rectangle.X, rectangle.Bottom - d, d, d, 90, 90);
+        path.AddArc(
+            rectangle.X,
+            rectangle.Y,
+            d,
+            d,
+            180,
+            90);
+
+        path.AddArc(
+            rectangle.Right - d,
+            rectangle.Y,
+            d,
+            d,
+            270,
+            90);
+
+        path.AddArc(
+            rectangle.Right - d,
+            rectangle.Bottom - d,
+            d,
+            d,
+            0,
+            90);
+
+        path.AddArc(
+            rectangle.X,
+            rectangle.Bottom - d,
+            d,
+            d,
+            90,
+            90);
+
         path.CloseFigure();
 
         return path;
@@ -482,22 +647,64 @@ public class GlassPanel : Panel
         BackColor = Color.FromArgb(27, 29, 36);
     }
 
-    protected override void OnPaint(PaintEventArgs e)
+    protected override void OnPaint(
+        PaintEventArgs e)
     {
-        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.SmoothingMode =
+            SmoothingMode.AntiAlias;
 
-        var rectangle = new Rectangle(0, 0, Width - 1, Height - 1);
+        var rectangle =
+            new Rectangle(
+                0,
+                0,
+                Width - 1,
+                Height - 1);
+
         var path = new GraphicsPath();
         int d = Radius * 2;
 
-        path.AddArc(rectangle.X, rectangle.Y, d, d, 180, 90);
-        path.AddArc(rectangle.Right - d, rectangle.Y, d, d, 270, 90);
-        path.AddArc(rectangle.Right - d, rectangle.Bottom - d, d, d, 0, 90);
-        path.AddArc(rectangle.X, rectangle.Bottom - d, d, d, 90, 90);
+        path.AddArc(
+            rectangle.X,
+            rectangle.Y,
+            d,
+            d,
+            180,
+            90);
+
+        path.AddArc(
+            rectangle.Right - d,
+            rectangle.Y,
+            d,
+            d,
+            270,
+            90);
+
+        path.AddArc(
+            rectangle.Right - d,
+            rectangle.Bottom - d,
+            d,
+            d,
+            0,
+            90);
+
+        path.AddArc(
+            rectangle.X,
+            rectangle.Bottom - d,
+            d,
+            d,
+            90,
+            90);
+
         path.CloseFigure();
 
-        using var brush = new SolidBrush(Color.FromArgb(27, 29, 36));
-        using var pen = new Pen(Color.FromArgb(52, 54, 63), 1);
+        using var brush =
+            new SolidBrush(
+                Color.FromArgb(27, 29, 36));
+
+        using var pen =
+            new Pen(
+                Color.FromArgb(52, 54, 63),
+                1);
 
         e.Graphics.FillPath(brush, path);
         e.Graphics.DrawPath(pen, path);
